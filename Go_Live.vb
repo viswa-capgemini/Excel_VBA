@@ -47,6 +47,7 @@ Sub CreateTaskSchedule()
     Else
         ' Read existing data from cells and process it
         ProcessExistingData
+        ProcessResourceData
     End If
     
     ' Auto-fit columns
@@ -54,6 +55,7 @@ Sub CreateTaskSchedule()
     
     ' Now color the cells based on the dates in the cells
     ColorTaskRows
+    ColorResourceRows
     
     MsgBox "Task schedule created successfully!", vbInformation
 End Sub
@@ -109,6 +111,16 @@ Sub ColorTaskRows()
     ' Define the sets of rows to process
     rowSets = Array(Array(9, 12), Array(20, 23), Array(33, 36))
     
+    ' First, clear any existing colors in all potential cells
+    For Each rowSet In rowSets
+        startRow = rowSet(0)
+        endRow = rowSet(1)
+        
+        ' Clear colors in this row range
+        ws.Range(ws.Cells(startRow, 10), ws.Cells(endRow, 52)).Interior.ColorIndex = xlNone
+        Debug.Print "Cleared colors in rows " & startRow & " to " & endRow
+    Next rowSet
+    
     ' Process each set of rows
     For Each rowSet In rowSets
         startRow = rowSet(0)
@@ -153,6 +165,78 @@ Sub ColorTaskRows()
                 
                 ' Debug information
                 Debug.Print "Task: " & taskName & " (Row " & rowNum & ")"
+                Debug.Print "Start Date: " & Format(startDate, "dd-mm-yyyy") & ", End Date: " & Format(endDate, "dd-mm-yyyy")
+                Debug.Print "Start Column: " & startCol & ", End Column: " & endCol
+            End If
+        Next rowNum
+    Next rowSet
+End Sub
+
+Sub ColorResourceRows()
+    Dim ws As Worksheet
+    Dim startDate As Date
+    Dim endDate As Date
+    Dim personName As String
+    Dim startCol As Long
+    Dim endCol As Long
+    Dim resourceColor As Long
+    Dim i As Long
+    Dim rowNum As Long
+    Dim rowSets As Variant
+    Dim rowSet As Variant
+    Dim startRow As Integer
+    Dim endRow As Integer
+    
+    Set ws = ThisWorkbook.Sheets("GanttChart")
+    
+    ' Define the sets of rows to process
+    rowSets = Array(Array(14, 17), Array(25, 30), Array(38, 43))
+    
+    ' First, clear any existing colors in all potential cells
+    For Each rowSet In rowSets
+        startRow = rowSet(0)
+        endRow = rowSet(1)
+        
+        ' Clear colors in this row range
+        ws.Range(ws.Cells(startRow, 10), ws.Cells(endRow, 52)).Interior.ColorIndex = xlNone
+        Debug.Print "Cleared colors in rows " & startRow & " to " & endRow
+    Next rowSet
+    
+    ' Process each set of rows
+    For Each rowSet In rowSets
+        startRow = rowSet(0)
+        endRow = rowSet(1)
+        
+        ' Process rows in this set
+        For rowNum = startRow To endRow
+            ' Get person name and dates from the cells
+            personName = ws.Cells(rowNum, 2).Value
+            
+            ' Check if there's a valid date in the cell and a person name
+            If personName <> "" And IsDate(ws.Cells(rowNum, 5).Value) And IsDate(ws.Cells(rowNum, 6).Value) Then
+                startDate = ws.Cells(rowNum, 5).Value
+                endDate = ws.Cells(rowNum, 6).Value
+                
+                ' Calculate start and end columns based on dates
+                startCol = CalculateWeekColumn(startDate)
+                endCol = CalculateWeekColumn(endDate)
+                
+                ' Special handling for dates that fall on the 31st of a month
+                If Day(endDate) = 31 Then
+                    endCol = endCol - 1
+                    Debug.Print "Adjusted end column for date " & Format(endDate, "dd-mm-yyyy") & " from " & (endCol + 1) & " to " & endCol
+                End If
+                
+                ' Set color to dark blue for all person names
+                resourceColor = RGB(0, 0, 139) ' Dark blue
+                
+                ' Fill the cells with dark blue color
+                For i = startCol To endCol
+                    ws.Cells(rowNum, i).Interior.Color = resourceColor
+                Next i
+                
+                ' Debug information
+                Debug.Print "Person: " & personName & " (Row " & rowNum & ")"
                 Debug.Print "Start Date: " & Format(startDate, "dd-mm-yyyy") & ", End Date: " & Format(endDate, "dd-mm-yyyy")
                 Debug.Print "Start Column: " & startCol & ", End Column: " & endCol
             End If
@@ -212,6 +296,61 @@ Sub ProcessExistingData()
     
     ' Define the sets of rows to process
     rowSets = Array(Array(9, 12), Array(20, 23), Array(33, 36))
+    
+    ' Process each set of rows
+    For Each rowSet In rowSets
+        startRow = rowSet(0)
+        endRow = rowSet(1)
+        
+        ' Process rows in this set
+        For rowNum = startRow To endRow
+            ' Check if there's data in this row
+            If ws.Cells(rowNum, 2).Value <> "" Then
+                taskName = ws.Cells(rowNum, 2).Value
+                
+                ' Check if there are valid dates
+                If IsDate(ws.Cells(rowNum, 5).Value) And IsDate(ws.Cells(rowNum, 6).Value) Then
+                    startDate = ws.Cells(rowNum, 5).Value
+                    endDate = ws.Cells(rowNum, 6).Value
+                    
+                    ' Calculate business days (excluding weekends)
+                    ws.Cells(rowNum, 8).Formula = "=NETWORKDAYS(E" & rowNum & ",F" & rowNum & ")"
+                    
+                    ' Calculate percentage of work done based on weeks
+                    percentageWorkDone = CalculatePercentage(startDate, endDate)
+                    ws.Cells(rowNum, 7).Value = percentageWorkDone & "%"
+                    
+                    ' Format date cells
+                    ws.Cells(rowNum, 5).NumberFormat = "dd-mm-yyyy"
+                    ws.Cells(rowNum, 6).NumberFormat = "dd-mm-yyyy"
+                    
+                    ' Format percentage cell
+                    ws.Cells(rowNum, 7).NumberFormat = "0%"
+                    
+                    ' Debug information
+                    Debug.Print "Processing existing data: " & taskName & ", " & startDate & " to " & endDate & " (Row " & rowNum & ")"
+                End If
+            End If
+        Next rowNum
+    Next rowSet
+End Sub
+
+Sub ProcessResourceData()
+    Dim ws As Worksheet
+    Dim rowNum As Integer
+    Dim taskName As String
+    Dim startDate As Date
+    Dim endDate As Date
+    Dim percentageWorkDone As Double
+    Dim rowSets As Variant
+    Dim rowSet As Variant
+    Dim startRow As Integer
+    Dim endRow As Integer
+    
+    Set ws = ThisWorkbook.Sheets("GanttChart")
+    
+    ' Define the sets of rows to process
+    rowSets = Array(Array(14, 17), Array(25, 30), Array(38, 43))
     
     ' Process each set of rows
     For Each rowSet In rowSets
